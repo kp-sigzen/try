@@ -1,0 +1,35 @@
+name: CI/CD Pipeline 
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  update:
+    if: contains(github.event.pull_request.title,['Update'])
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        server: [server1, server2] 
+        name: [site1, site2]  
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets[matrix.server + '_PRIVATE_KEY'] }}
+
+      - name: Deploy and Update to Production
+        env:
+          USER: ${{ secrets[matrix.server + '_USER'] }}
+          HOSTNAME: ${{ secrets[matrix.server + '_HOSTNAME'] }}
+        run: |
+          ssh -o StrictHostKeyChecking=no $USER@$HOSTNAME << 'EOF'
+            cd frappe-bench/
+            git pull origin main
+            bench --site ${{ matrix.name }} migrate
+            bench restart
+          EOF
